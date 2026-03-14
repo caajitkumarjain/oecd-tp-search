@@ -27,6 +27,20 @@ MAX_CHUNK_LENGTH = 2000
 # Paragraph reference pattern: "1.29." or "10.5." on its own line or at start
 PARA_REF_PATTERN = re.compile(r"^(\d{1,2}\.\d{1,3})\.?\s", re.MULTILINE)
 
+# Canonical chapter mapping — roman numerals to standard names
+ROMAN_TO_CHAPTER = {
+    "I": "Chapter I",
+    "II": "Chapter II",
+    "III": "Chapter III",
+    "IV": "Chapter IV",
+    "V": "Chapter V",
+    "VI": "Chapter VI",
+    "VII": "Chapter VII",
+    "VIII": "Chapter VIII",
+    "IX": "Chapter IX",
+    "X": "Chapter X",
+}
+
 
 def extract_text_by_page(pdf_path: str) -> list[dict]:
     """Extract text from each page of the PDF."""
@@ -42,24 +56,48 @@ def extract_text_by_page(pdf_path: str) -> list[dict]:
 
 
 def detect_chapter(text: str) -> str:
-    """Detect chapter from page header/text."""
-    chapter_patterns = [
-        r"Chapter\s+(I{1,3}V?|V?I{0,3}|[0-9]+)",
-        r"CHAPTER\s+(I{1,3}V?|V?I{0,3}|[0-9]+)",
-    ]
-    for pattern in chapter_patterns:
+    """Detect chapter from page header/text using multiple strategies."""
+    # Strategy 1: Match "CHAPTER IX" or "Chapter IX" in headers
+    # Full roman numeral pattern: I, II, III, IV, V, VI, VII, VIII, IX, X
+    roman_pattern = r"(?:X|IX|VIII|VII|VI|V|IV|III|II|I)"
+    for pattern in [
+        rf"CHAPTER\s+({roman_pattern})\b",
+        rf"Chapter\s+({roman_pattern})\b",
+        rf"CHAPTER\s+(\d{{1,2}})\b",
+        rf"Chapter\s+(\d{{1,2}})\b",
+    ]:
         match = re.search(pattern, text)
         if match:
-            return f"Chapter {match.group(1)}"
+            val = match.group(1)
+            if val in ROMAN_TO_CHAPTER:
+                return ROMAN_TO_CHAPTER[val]
+            if val.isdigit():
+                # Map numeric to roman
+                num_map = {
+                    "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V",
+                    "6": "VI", "7": "VII", "8": "VIII", "9": "IX", "10": "X",
+                }
+                roman = num_map.get(val, val)
+                return ROMAN_TO_CHAPTER.get(roman, f"Chapter {val}")
+            return f"Chapter {val}"
+
+    # Strategy 2: Infer from paragraph numbering (e.g., "9.1." means Chapter IX)
+    para_match = re.search(r"\b(\d{1,2})\.\d{1,3}\.\s", text)
+    if para_match:
+        ch_num = para_match.group(1)
+        num_map = {
+            "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V",
+            "6": "VI", "7": "VII", "8": "VIII", "9": "IX", "10": "X",
+        }
+        roman = num_map.get(ch_num)
+        if roman and roman in ROMAN_TO_CHAPTER:
+            return ROMAN_TO_CHAPTER[roman]
+
     return "Unknown"
 
 
 def extract_para_ref(text: str) -> str:
-    """
-    Extract OECD paragraph reference from text.
-    The Guidelines use format like "1.29." or "6.48." at the start of paragraphs.
-    These appear either at the start of the text block or on a preceding line.
-    """
+    """Extract OECD paragraph reference from text (e.g., 1.29, 6.48, 10.5)."""
     match = PARA_REF_PATTERN.match(text)
     if match:
         return match.group(1)
@@ -69,7 +107,7 @@ def extract_para_ref(text: str) -> str:
 def chunk_text(pages: list[dict]) -> list[dict]:
     """
     Split page text into paragraph-level chunks.
-    Detects OECD paragraph references (e.g., 1.29, 6.48) and attaches as metadata.
+    Detects OECD paragraph references (e.g., 1.29, 6.48, 10.5) and attaches as metadata.
     """
     chunks = []
     current_chapter = "Preamble"
@@ -84,8 +122,7 @@ def chunk_text(pages: list[dict]) -> list[dict]:
         if detected != "Unknown":
             current_chapter = detected
 
-        # Split on paragraph reference boundaries: lines starting with "X.XX."
-        # This preserves the paragraph number with its text
+        # Split on paragraph reference boundaries: lines starting with "X.XX." or "XX.XX."
         parts = re.split(r"\n(?=\d{1,2}\.\d{1,3}\.\s)", text)
 
         for part in parts:
@@ -99,11 +136,7 @@ def chunk_text(pages: list[dict]) -> list[dict]:
                 if len(para) < MIN_CHUNK_LENGTH:
                     continue
 
-                # Extract paragraph reference
                 para_ref = extract_para_ref(para)
-
-                # Clean the paragraph number from the display text if it's at the start
-                # Keep it in — users want to see "1.29. Global formulary..."
                 display_text = para
 
                 def make_chunk(text_block, ref):
@@ -117,26 +150,19 @@ def chunk_text(pages: list[dict]) -> list[dict]:
                     })
                     chunk_id += 1
 
-                # Split overly long paragraphs
                 if len(display_text) > MAX_CHUNK_LENGTH:
                     sentences = re.split(r"(?<=[.!?])\s+", display_text)
                     current_block = ""
                     first_block = True
                     for sentence in sentences:
                         if len(current_block) + len(sentence) > MAX_CHUNK_LENGTH and current_block:
-                            make_chunk(
-                                current_block.strip(),
-                                para_ref if first_block else "",
-                            )
+                            make_chunk(current_block.strip(), para_ref if first_block else "")
                             first_block = False
                             current_block = sentence
                         else:
                             current_block += " " + sentence
                     if current_block.strip():
-                        make_chunk(
-                            current_block.strip(),
-                            para_ref if first_block else "",
-                        )
+                        make_chunk(current_block.strip(), para_ref if first_block else "")
                 else:
                     make_chunk(display_text, para_ref)
 
@@ -159,7 +185,16 @@ def ingest():
     para_count = sum(1 for c in chunks if c["para_ref"])
     print(f"Created {len(chunks)} chunks ({para_count} with paragraph references).")
 
-    print("Loading embedding model (all-MiniLM-L6-v2)...")
+    # Print chapter breakdown
+    chapter_counts = {}
+    for c in chunks:
+        ch = c["chapter"]
+        chapter_counts[ch] = chapter_counts.get(ch, 0) + 1
+    print("\nChapter breakdown:")
+    for ch in sorted(chapter_counts.keys()):
+        print(f"  {ch}: {chapter_counts[ch]} chunks")
+
+    print(f"\nLoading embedding model (all-MiniLM-L6-v2)...")
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
     print("Generating embeddings...")
@@ -197,7 +232,7 @@ def ingest():
             ],
         )
 
-    print(f"Done. {len(chunks)} chunks ingested into collection '{COLLECTION_NAME}'.")
+    print(f"\nDone. {len(chunks)} chunks ingested into collection '{COLLECTION_NAME}'.")
 
 
 if __name__ == "__main__":

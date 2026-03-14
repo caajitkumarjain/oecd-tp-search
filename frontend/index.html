@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TP Lab — AI-Powered Transfer Pricing Intelligence</title>
-    <meta name="description" content="Search 2,200+ OECD Guidelines paragraphs with semantic AI. Get PhD-level analysis and expert advisory powered by Claude.">
+    <meta name="description" content="Search 2,200+ OECD Guidelines paragraphs with semantic AI. Get PhD-level analysis and expert research powered by Claude.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -1338,6 +1338,52 @@
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .search-chapters { display: none; }
         }
+        /* ========== DISCLAIMER STYLES ========== */
+        .disclaimer-bar {
+            text-align: center;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #1e293b;
+            margin-top: 2rem;
+        }
+        .disclaimer-bar p {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.5;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .output-disclaimer {
+            font-size: 12px;
+            color: #d97706;
+            font-style: italic;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0.75rem;
+            border-left: 2px solid #d97706;
+            background: rgba(217, 119, 6, 0.05);
+            border-radius: 0 4px 4px 0;
+        }
+        .disclaimer-page {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .disclaimer-page h1 {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            color: #f0f4f8;
+        }
+        .disclaimer-page h3 {
+            font-size: 1.1rem;
+            color: #f59e0b;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .disclaimer-page p {
+            font-size: 0.95rem;
+            color: #94a3b8;
+            line-height: 1.7;
+            margin-bottom: 0.75rem;
+        }
+
         @media (max-width: 768px) {
             .hero h1 { font-size: 32px; }
             .hero, .features-section, .how-section, .demo-section, .pricing-section { padding-left: 20px; padding-right: 20px; }
@@ -1584,7 +1630,7 @@
                         <div className="hero-badge">Powered by Claude AI</div>
                         <h1>The World's First <em>AI-Powered</em> Transfer Pricing Intelligence Engine</h1>
                         <p className="hero-sub">
-                            Search 2,200+ OECD Guidelines paragraphs with semantic AI. Get PhD-level analysis and expert advisory powered by Claude — in seconds, not hours.
+                            Search 2,200+ OECD Guidelines paragraphs with semantic AI. Get PhD-level analysis and expert research powered by Claude — in seconds, not hours.
                         </p>
                         <div className="hero-ctas">
                             <a href="#/signup" className="btn btn-amber btn-lg">Start Free &rarr;</a>
@@ -1605,7 +1651,7 @@
                     {/* Features */}
                     <section className="features-section">
                         <h2 className="section-title">Three Layers of Intelligence</h2>
-                        <p className="section-sub">From instant search to deep advisory — every layer builds on the last.</p>
+                        <p className="section-sub">From instant search to deep research — every layer builds on the last.</p>
                         <div className="features-grid">
                             <div className="card feature-card fade-in-up" style={{animationDelay:"0.1s"}}>
                                 <div className="feature-icon feature-icon-green">&#x1F50D;</div>
@@ -1619,8 +1665,8 @@
                             </div>
                             <div className="card feature-card fade-in-up" style={{animationDelay:"0.3s"}}>
                                 <div className="feature-icon feature-icon-blue">&#x1F9E0;</div>
-                                <h3>TP Advisory Intelligence <span className="badge-pro">PRO</span></h3>
-                                <p>Ask complex transfer pricing questions. Get comprehensive answers backed by OECD references and web-sourced developments — like having a TP expert on demand.</p>
+                                <h3>TP Research Assistant <span className="badge-pro">PRO</span></h3>
+                                <p>Research any transfer pricing question. Get synthesis of OECD Guidelines, recent developments, and established TP principles — in seconds, not hours.</p>
                             </div>
                         </div>
                     </section>
@@ -1642,8 +1688,8 @@
                             </div>
                             <div className="card step-card">
                                 <div className="step-number">3</div>
-                                <h3>Get Advisory</h3>
-                                <p>Ask complex questions and receive comprehensive advisory backed by OECD citations and web sources.</p>
+                                <h3>Research</h3>
+                                <p>Ask complex questions and receive comprehensive research backed by OECD citations and web sources.</p>
                             </div>
                         </div>
                     </section>
@@ -1688,9 +1734,15 @@
                     {/* Pricing */}
                     <PricingSection />
 
+                    {/* Disclaimer bar */}
+                    <div className="disclaimer-bar">
+                        <p>TP Lab is a research tool. Nothing on this platform constitutes professional tax advice, legal advice, or a recommendation to take any specific action. Users should consult qualified tax professionals for advice specific to their circumstances.</p>
+                    </div>
+
                     {/* Footer */}
                     <footer className="landing-footer">
                         <p className="footer-brand"><strong>TP Lab</strong> — An Averise Advisors Product</p>
+                        <p className="footer-sub"><a href="#/disclaimer">Disclaimer</a> &middot; Privacy Policy &middot; Terms of Service</p>
                         <p className="footer-sub">&copy; 2026 Averise Advisors. All rights reserved.</p>
                     </footer>
 
@@ -1731,7 +1783,7 @@
                                 <li>Unlimited searches</li>
                                 <li>PhD-level AI analysis</li>
                                 <li>Deep multi-paragraph analysis</li>
-                                <li>TP Advisory Intelligence</li>
+                                <li>TP Research Intelligence</li>
                                 <li>Export & citation tools</li>
                                 <li>Priority support</li>
                             </ul>
@@ -1798,7 +1850,7 @@
                     <div className="auth-left">
                         <div className="auth-left-logo">TP<span>Lab</span></div>
                         <h2>Join the future of transfer pricing intelligence.</h2>
-                        <p>TP Lab gives you AI-powered access to the entire OECD Transfer Pricing Guidelines — search, analyze, and get expert advisory in seconds.</p>
+                        <p>TP Lab gives you AI-powered access to the entire OECD Transfer Pricing Guidelines — search, analyze, and research in seconds.</p>
                         <ul className="auth-benefits">
                             <li>
                                 <div className="auth-benefit-icon">&#x1F50D;</div>
@@ -1810,7 +1862,7 @@
                             </li>
                             <li>
                                 <div className="auth-benefit-icon">&#x1F9E0;</div>
-                                <div><strong style={{color:"var(--text-primary)"}}>Expert Advisory</strong><br/>Ask complex TP questions and get comprehensive answers backed by OECD citations.</div>
+                                <div><strong style={{color:"var(--text-primary)"}}>Expert Research</strong><br/>Ask complex TP questions and get comprehensive answers backed by OECD citations.</div>
                             </li>
                         </ul>
                     </div>
@@ -1886,7 +1938,7 @@
                     <div className="auth-left">
                         <div className="auth-left-logo">TP<span>Lab</span></div>
                         <h2>Welcome back to TP Lab.</h2>
-                        <p>The AI-powered transfer pricing intelligence engine trusted by professionals worldwide. Search, analyze, and get advisory — all in one platform.</p>
+                        <p>The AI-powered transfer pricing intelligence engine trusted by professionals worldwide. Search, analyze, and research — all in one platform.</p>
                         <ul className="auth-benefits">
                             <li>
                                 <div className="auth-benefit-icon">&#x26A1;</div>
@@ -1950,7 +2002,7 @@
             const navItems = [
                 { key: "dashboard", icon: "\u2302", label: "Dashboard" },
                 { key: "search", icon: "\uD83D\uDD0D", label: "Search" },
-                { key: "advisory", icon: "\uD83E\uDDE0", label: "Advisory" },
+                { key: "advisory", icon: "\uD83E\uDDE0", label: "Research" },
                 { key: "pricing", icon: "\uD83D\uDCB3", label: "Pricing" },
             ];
 
@@ -2040,7 +2092,7 @@
                             <div className="stat-sub">PhD-level deep dives</div>
                         </div>
                         <div className="card stat-card fade-in-up" style={{animationDelay:"0.25s"}}>
-                            <div className="stat-label">Advisory Queries</div>
+                            <div className="stat-label">Research Queries</div>
                             <div className="stat-value">{usage?.total_advisory ?? "..."}</div>
                             <div className="stat-sub">expert responses</div>
                         </div>
@@ -2049,7 +2101,7 @@
                     <h3 style={{marginBottom: "16px", fontSize: "16px", fontWeight: 600}}>Quick Actions</h3>
                     <div className="quick-actions">
                         <button className="btn btn-amber" onClick={() => navigate("/search")}>&#x1F50D; Search Guidelines</button>
-                        <button className="btn btn-blue" onClick={() => navigate("/advisory")}>&#x1F9E0; Ask TP Advisory</button>
+                        <button className="btn btn-blue" onClick={() => navigate("/advisory")}>&#x1F9E0; TP Research</button>
                         <button className="btn btn-outline" onClick={() => navigate("/pricing")}>&#x1F4B3; View Plans</button>
                     </div>
                 </AuthLayout>
@@ -2309,6 +2361,8 @@
 
                                         {/* Deep analysis panel */}
                                         {showDeepAnalysis && (deepAnalysis || loadingDeep) && (
+                                            <React.Fragment>
+                                            <p className="output-disclaimer">Research output — not professional advice. Verify independently before relying on any information.</p>
                                             <div className="analysis-panel deep-panel">
                                                 <div className="analysis-panel-header">
                                                     <span className="analysis-panel-title">PhD-Level Deep Analysis</span>
@@ -2323,6 +2377,7 @@
                                                 )}
                                                 {deepAnalysis && <div className="analysis-content">{renderMarkdown(deepAnalysis)}</div>}
                                             </div>
+                                            </React.Fragment>
                                         )}
                                     </React.Fragment>
                                 )}
@@ -2376,6 +2431,8 @@
 
                                                 {/* Single paragraph analysis */}
                                                 {(loadingAnalysis === r.id || analysisMap[r.id]) && (
+                                                    <React.Fragment>
+                                                    <p className="output-disclaimer">Research output — not professional advice. Verify independently before relying on any information.</p>
                                                     <div className="analysis-panel">
                                                         <div className="analysis-panel-header">
                                                             <span className="analysis-panel-title">PhD-Level Analysis</span>
@@ -2390,6 +2447,7 @@
                                                         )}
                                                         {analysisMap[r.id] && <div className="analysis-content">{renderMarkdown(analysisMap[r.id])}</div>}
                                                     </div>
+                                                    </React.Fragment>
                                                 )}
 
                                                 {/* Related paragraphs */}
@@ -2465,15 +2523,15 @@
                     const data = await api("POST", "/advisory", { question: q });
                     setResult(data);
                 } catch (err) {
-                    setError(err.message || "Advisory unavailable.");
+                    setError(err.message || "Research unavailable.");
                 } finally { setLoading(false); }
             }
 
             return (
                 <AuthLayout activePage="advisory">
                     <div className="page-header">
-                        <h1>TP Advisory Intelligence</h1>
-                        <p>Ask complex transfer pricing questions and get comprehensive answers backed by OECD citations.</p>
+                        <h1>TP Research Intelligence</h1>
+                        <p>Research complex transfer pricing questions and get comprehensive answers backed by OECD citations.</p>
                     </div>
 
                     <form className="advisory-form" onSubmit={handleSubmit}>
@@ -2481,11 +2539,11 @@
                             className="input"
                             value={question}
                             onChange={(e) => setQuestion(e.target.value)}
-                            placeholder="Ask any transfer pricing question..."
+                            placeholder="Research any transfer pricing question..."
                             rows={4}
                         />
                         <button type="submit" className="btn btn-amber" disabled={loading || !question.trim()} style={{marginTop:"12px"}}>
-                            {loading ? "Researching..." : "Get Advisory"}
+                            {loading ? "Researching..." : "Research This Question"}
                         </button>
                     </form>
 
@@ -2505,6 +2563,7 @@
                         <div className="advisory-loading-indicator">
                             <div className="advisory-pulse"></div>
                             <span>Researching your question across OECD Guidelines and recent developments...</span>
+
                         </div>
                     )}
 
@@ -2512,9 +2571,10 @@
 
                     {result && (
                         <div className="advisory-response fade-in">
+                            <p className="output-disclaimer">Research output — not professional advice. Verify independently before relying on any information.</p>
                             <div className="advisory-answer">
                                 <div className="advisory-answer-header">
-                                    <span className="advisory-answer-title">TP Advisory Response</span>
+                                    <span className="advisory-answer-title">TP Research Response</span>
                                     <button className="cite-btn cite-btn-sm" onClick={() => copyToClipboard(result.answer, "copy-advisory")}>
                                         {copiedState === "copy-advisory" ? "Copied!" : "Copy Response"}
                                     </button>
@@ -2601,8 +2661,79 @@
                     <div style={{paddingTop:"40px"}}>
                         <PricingSection />
                     </div>
+                    {/* Disclaimer bar */}
+                    <div className="disclaimer-bar">
+                        <p>TP Lab is a research tool. Nothing on this platform constitutes professional tax advice, legal advice, or a recommendation to take any specific action. Users should consult qualified tax professionals for advice specific to their circumstances.</p>
+                    </div>
+
                     <footer className="landing-footer">
                         <p className="footer-brand"><strong>TP Lab</strong> — An Averise Advisors Product</p>
+                        <p className="footer-sub"><a href="#/disclaimer">Disclaimer</a> &middot; Privacy Policy &middot; Terms of Service</p>
+                        <p className="footer-sub">&copy; 2026 Averise Advisors. All rights reserved.</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // DISCLAIMER PAGE
+        // ============================================================
+        function DisclaimerPage() {
+            const { token } = getAuth();
+
+            const content = (
+                <div className="disclaimer-page fade-in-up">
+                    <h1>Disclaimer</h1>
+
+                    <h3>1. General Information Only</h3>
+                    <p>TP Lab is a research and information tool. The content provided on this platform, including search results, analysis outputs, and research responses, is for general informational purposes only. Nothing on this platform constitutes professional tax advice, legal advice, financial advice, or a recommendation to take any specific action.</p>
+
+                    <h3>2. Not a Substitute for Professional Advice</h3>
+                    <p>The information provided by TP Lab should not be used as a substitute for consultation with qualified tax professionals, legal advisors, or other relevant experts. Users should always seek advice from qualified professionals for matters specific to their circumstances before making any decisions based on information obtained through this platform.</p>
+
+                    <h3>3. No Warranty or Guarantee</h3>
+                    <p>While TP Lab strives to provide accurate and up-to-date information, Averise Advisors makes no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability, or availability of the information, products, services, or related content contained on the platform. Any reliance you place on such information is strictly at your own risk.</p>
+
+                    <h3>4. AI-Generated Content</h3>
+                    <p>TP Lab uses artificial intelligence (including Claude AI) to generate analysis and research outputs. AI-generated content may contain errors, omissions, or inaccuracies. Users should independently verify all AI-generated information before relying on it for any purpose.</p>
+
+                    <h3>5. OECD Guidelines Reference</h3>
+                    <p>TP Lab references the OECD Transfer Pricing Guidelines for Multinational Enterprises and Tax Administrations. The platform's search and analysis features are based on the 2022 edition of these guidelines. Users should verify that they are consulting the most current version of relevant guidelines and regulations applicable to their jurisdiction.</p>
+
+                    <h3>6. Limitation of Liability</h3>
+                    <p>In no event shall Averise Advisors, its directors, employees, partners, agents, suppliers, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of (or inability to access or use) the platform.</p>
+
+                    <h3>7. Governing Law</h3>
+                    <p>This disclaimer and your use of TP Lab shall be governed by and construed in accordance with the laws of the United Arab Emirates and the Emirate of Dubai, without regard to its conflict of law provisions.</p>
+
+                    <p style={{marginTop: "2rem", fontStyle: "italic"}}>Last updated: March 2026</p>
+                </div>
+            );
+
+            if (token) {
+                return (
+                    <AuthLayout activePage="">
+                        {content}
+                    </AuthLayout>
+                );
+            }
+
+            return (
+                <div className="dot-grid">
+                    <nav className="landing-nav">
+                        <a href="#/" className="landing-logo" style={{textDecoration:"none"}}>TP<span>Lab</span></a>
+                        <div className="landing-nav-links">
+                            <a href="#/login">Log In</a>
+                            <a href="#/signup" className="btn btn-amber btn-sm">Get Started</a>
+                        </div>
+                    </nav>
+                    {content}
+                    <div className="disclaimer-bar">
+                        <p>TP Lab is a research tool. Nothing on this platform constitutes professional tax advice, legal advice, or a recommendation to take any specific action. Users should consult qualified tax professionals for advice specific to their circumstances.</p>
+                    </div>
+                    <footer className="landing-footer">
+                        <p className="footer-brand"><strong>TP Lab</strong> — An Averise Advisors Product</p>
+                        <p className="footer-sub"><a href="#/disclaimer">Disclaimer</a> &middot; Privacy Policy &middot; Terms of Service</p>
                         <p className="footer-sub">&copy; 2026 Averise Advisors. All rights reserved.</p>
                     </footer>
                 </div>
@@ -2648,6 +2779,8 @@
                     return requireAuth(AdvisoryPage);
                 case "/pricing":
                     return React.createElement(PricingPage);
+                case "/disclaimer":
+                    return React.createElement(DisclaimerPage);
                 default:
                     return React.createElement(LandingPage);
             }
