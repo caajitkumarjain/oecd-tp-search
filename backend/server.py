@@ -484,36 +484,55 @@ async def advisory(
             "relevance_score": round(similarity, 4),
         })
 
-    # Step 2: Web search via Claude with web_search tool
+    # Step 2: Web search for recent TP developments
     web_sources = []
     web_context = ""
     try:
-        web_response = anthropic_client.messages.create(
-            model=claude_model,
-            max_tokens=4096,
-            tools=[{"type": "web_search_20250305", "name": "web_search"}],
-            messages=[{
-                "role": "user",
-                "content": f"Search for recent transfer pricing guidance, rulings, or updates relevant to this question: {req.question}. Focus on OECD updates, tax authority guidance, and recent case law. Summarize the key findings."
-            }],
+        import httpx
+
+        # Use DuckDuckGo HTML search with httpx
+        words = req.question.split()
+        key_terms = " ".join(words[:6]) if len(words) > 6 else req.question
+        search_query = f"OECD transfer pricing {key_terms}"
+
+        resp = httpx.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": search_query},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=8,
+            follow_redirects=True,
         )
 
-        # Extract web sources and text from response
-        for block in web_response.content:
-            if block.type == "text":
-                web_context += block.text + "\n"
-            elif block.type == "tool_use":
-                pass  # web_search tool call
-            elif hasattr(block, "type") and block.type == "web_search_tool_result":
-                # Extract search results from the tool result
-                if hasattr(block, "content"):
-                    for item in block.content:
-                        if hasattr(item, "type") and item.type == "web_search_result":
-                            web_sources.append({
-                                "title": getattr(item, "title", ""),
-                                "url": getattr(item, "url", ""),
-                                "snippet": getattr(item, "snippet", getattr(item, "description", "")),
-                            })
+        if resp.status_code == 200:
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            seen_urls = set()
+            for result in soup.select(".result"):
+                title_el = result.select_one(".result__title a, .result__a")
+                snippet_el = result.select_one(".result__snippet")
+                if not title_el:
+                    continue
+                title = title_el.get_text(strip=True)
+                url = title_el.get("href", "")
+                # DuckDuckGo HTML wraps URLs in redirect — extract actual URL
+                if "uddg=" in url:
+                    from urllib.parse import unquote, parse_qs, urlparse
+                    parsed = parse_qs(urlparse(url).query)
+                    url = unquote(parsed.get("uddg", [url])[0])
+                snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+                if url and url not in seen_urls and title:
+                    seen_urls.add(url)
+                    web_sources.append({"title": title, "url": url, "snippet": snippet})
+                if len(web_sources) >= 5:
+                    break
+
+        if web_sources:
+            web_context = "Recent web intelligence:\n\n" + "\n\n".join([
+                f"- **{s['title']}**: {s['snippet']}" for s in web_sources
+            ])
+        else:
+            web_context = "No recent web results found for this query."
     except Exception as e:
         web_context = f"Web search unavailable: {str(e)}"
 
