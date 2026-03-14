@@ -245,7 +245,7 @@
                     const data = await res.json();
                     setAnalysisMap(prev => ({ ...prev, [id]: data.analysis }));
                 } catch {
-                    setAnalysisMap(prev => ({ ...prev, [id]: "ERROR: Analysis unavailable. Check your OpenAI API key in the .env file." }));
+                    setAnalysisMap(prev => ({ ...prev, [id]: "ERROR: Analysis unavailable. Check your Anthropic API key in the .env file." }));
                 } finally { setLoadingAnalysis(null); }
             }
 
@@ -270,7 +270,7 @@
                     const data = await res.json();
                     setDeepAnalysis(data.analysis);
                 } catch {
-                    setDeepAnalysis("ERROR: Analysis unavailable. Check your OpenAI API key in the .env file.");
+                    setDeepAnalysis("ERROR: Analysis unavailable. Check your Anthropic API key in the .env file.");
                 } finally { setLoadingDeep(false); }
             }
 
@@ -717,7 +717,7 @@
                                 <button className="modal-close" onClick={() => setShowEmailModal(false)}>&times;</button>
                                 <div className="modal-icon">&#x2728;</div>
                                 <h2 className="modal-title">Unlock PhD-Level Analysis</h2>
-                                <p className="modal-subtitle">Get AI-powered structural analysis of OECD Transfer Pricing Guidelines — powered by GPT-4o with transfer pricing expertise.</p>
+                                <p className="modal-subtitle">Get AI-powered structural analysis of OECD Transfer Pricing Guidelines — powered by Claude with transfer pricing expertise.</p>
                                 <form onSubmit={handleEmailSubmit} className="modal-form">
                                     <input
                                         type="email"

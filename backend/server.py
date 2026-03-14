@@ -6,7 +6,7 @@ Endpoints:
   GET   /related?id=<chunk_id>&n=<num>               — related paragraphs
   GET   /chapters                                     — chapter list with counts
   GET   /analyze/status                               — whether AI analysis is available
-  POST  /analyze                                      — GPT-4o PhD-level analysis
+  POST  /analyze                                      — Claude Sonnet 4.6 PhD-level analysis
   GET   /health                                       — health check
   GET   /stats                                        — collection statistics
   GET   /                                             — frontend
@@ -38,7 +38,7 @@ CHROMA_DIR = os.path.join(SCRIPT_DIR, "data")
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 COLLECTION_NAME = "oecd_tp_guidelines"
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 LEADS_FILE = os.path.join(CHROMA_DIR, "leads.json")
 
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -125,12 +125,12 @@ QUALITY GATE before responding: Would a 20-year veteran TP practitioner read thi
 # Shared state
 model = None
 collection = None
-openai_client = None
+anthropic_client = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, collection, openai_client
+    global model, collection, anthropic_client
     print("Loading embedding model...")
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -139,13 +139,13 @@ async def lifespan(app: FastAPI):
     collection = client.get_collection(COLLECTION_NAME)
     print(f"Ready. Collection has {collection.count()} chunks.")
 
-    if OPENAI_API_KEY and OPENAI_API_KEY != "your-openai-api-key-here":
-        from openai import OpenAI
+    if ANTHROPIC_API_KEY and not ANTHROPIC_API_KEY.startswith("your-"):
+        from anthropic import Anthropic
 
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("OpenAI analysis enabled.")
+        anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY)
+        print("Claude analysis enabled.")
     else:
-        print("OpenAI analysis disabled (no API key).")
+        print("Claude analysis disabled (no API key).")
 
     yield
 
@@ -305,7 +305,7 @@ def chapters():
 
 @app.get("/analyze/status")
 def analyze_status():
-    return {"enabled": openai_client is not None}
+    return {"enabled": anthropic_client is not None, "model": os.environ.get("ANTHROPIC_MODEL", "claude-3-haiku-20240307")}
 
 
 class RegisterRequest(BaseModel):
@@ -364,7 +364,7 @@ async def analyze(
     req: AnalyzeRequest,
     x_user_token: str = Header(None),
 ):
-    if not openai_client:
+    if not anthropic_client:
         raise HTTPException(status_code=503, detail="API key not configured")
 
     if not x_user_token:
@@ -385,14 +385,13 @@ async def analyze(
 
     user_msg = f"**Search Query:** {req.query}\n\n**Relevant OECD Guidelines Paragraphs:**\n\n" + "\n\n".join(para_texts)
 
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
+    response = anthropic_client.messages.create(
+        model=os.environ.get("ANTHROPIC_MODEL", "claude-3-haiku-20240307"),
+        max_tokens=4096,
+        system=ANALYSIS_SYSTEM_PROMPT,
         messages=[
-            {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
-        temperature=0.7,
-        max_tokens=4000,
     )
 
     # Update usage tracking
@@ -400,7 +399,7 @@ async def analyze(
     lead["last_analysis"] = datetime.now(timezone.utc).isoformat()
     save_leads(leads)
 
-    return {"analysis": response.choices[0].message.content}
+    return {"analysis": response.content[0].text}
 
 
 @app.get("/health")
