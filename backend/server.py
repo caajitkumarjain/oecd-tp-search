@@ -310,8 +310,9 @@ def analyze_status():
 
 class RegisterRequest(BaseModel):
     email: str
-    name: str = ""
-    company: str = ""
+    name: str
+    company: str
+    phone: str = ""
 
 
 @app.post("/register")
@@ -319,6 +320,10 @@ async def register(req: RegisterRequest, request: Request):
     email = req.email.strip().lower()
     if not EMAIL_RE.match(email):
         raise HTTPException(status_code=422, detail="Invalid email format")
+    if not req.name.strip() or not req.company.strip() or not req.phone.strip():
+        raise HTTPException(status_code=422, detail="Name, company, and phone are required")
+    if len(re.sub(r"\D", "", req.phone)) < 7:
+        raise HTTPException(status_code=422, detail="Invalid phone number")
 
     leads = load_leads()
 
@@ -332,6 +337,7 @@ async def register(req: RegisterRequest, request: Request):
         "email": email,
         "name": req.name.strip(),
         "company": req.company.strip(),
+        "phone": req.phone.strip(),
         "registered_at": datetime.now(timezone.utc).isoformat(),
         "ip": ip,
         "analysis_count": 0,

@@ -64,7 +64,7 @@
             const [showDeepAnalysis, setShowDeepAnalysis] = React.useState(false);
             const [showEmailModal, setShowEmailModal] = React.useState(false);
             const [userToken, setUserToken] = React.useState(null);
-            const [emailForm, setEmailForm] = React.useState({ email: "", name: "", company: "" });
+            const [emailForm, setEmailForm] = React.useState({ email: "", name: "", company: "", phone: "" });
             const [emailError, setEmailError] = React.useState("");
             const [emailSubmitting, setEmailSubmitting] = React.useState(false);
             const [pendingAnalysisAction, setPendingAnalysisAction] = React.useState(null);
@@ -191,8 +191,16 @@
             async function handleEmailSubmit(e) {
                 e.preventDefault();
                 const email = emailForm.email.trim();
+                if (!emailForm.name.trim() || !emailForm.company.trim() || !emailForm.phone.trim()) {
+                    setEmailError("All fields are required.");
+                    return;
+                }
                 if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
                     setEmailError("Please enter a valid email address.");
+                    return;
+                }
+                if ((emailForm.phone.replace(/\D/g, "")).length < 7) {
+                    setEmailError("Please enter a valid phone number (min 7 digits).");
                     return;
                 }
                 setEmailError("");
@@ -722,17 +730,27 @@
                                     />
                                     <input
                                         type="text"
-                                        placeholder="Your name (optional)"
+                                        placeholder="Your name *"
                                         value={emailForm.name}
                                         onChange={(e) => setEmailForm(prev => ({ ...prev, name: e.target.value }))}
                                         className="modal-input"
+                                        required
                                     />
                                     <input
                                         type="text"
-                                        placeholder="Company (optional)"
+                                        placeholder="Company *"
                                         value={emailForm.company}
                                         onChange={(e) => setEmailForm(prev => ({ ...prev, company: e.target.value }))}
                                         className="modal-input"
+                                        required
+                                    />
+                                    <input
+                                        type="tel"
+                                        placeholder="Phone number *"
+                                        value={emailForm.phone}
+                                        onChange={(e) => setEmailForm(prev => ({ ...prev, phone: e.target.value }))}
+                                        className="modal-input"
+                                        required
                                     />
                                     {emailError && <p className="modal-error">{emailError}</p>}
                                     <button type="submit" className="modal-submit" disabled={emailSubmitting}>
