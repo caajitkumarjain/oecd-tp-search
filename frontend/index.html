@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OECD TP Guidelines Intelligence</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const SUGGESTIONS = [
+            "DEMPE functions","arm's length principle","comparability analysis",
+            "profit split method","TNMM","CUP method","cost plus method",
+            "intangible property","location specific advantages","business restructuring",
+            "financial guarantee","cash pooling","cost contribution arrangement",
+            "safe harbour","advance pricing arrangement","corresponding adjustment",
+            "marketing intangibles","trade intangibles","hard-to-value intangibles",
+            "low value-adding services","management fees","risk allocation",
+            "benchmarking study","comparable uncontrolled transaction","resale price method",
+            "Berry ratio","residual profit split","HTVI","non-recognition",
+            "permanent establishment","profit attribution","economic substance",
+            "comparability adjustments","functional analysis","value chain analysis"
+        ];
+
+        const EXAMPLE_QUERIES = [
+            "DEMPE functions for marketing intangibles",
+            "Location specific advantages in developing countries",
+            "Financial guarantee fees arm's length",
+            "Hard-to-value intangibles HTVI",
+            "Low value-adding intra-group services",
+            "Risk allocation in business restructurings"
+        ];
+
+        function App() {
+            const [query, setQuery] = React.useState("");
+            const [results, setResults] = React.useState([]);
+            const [loading, setLoading] = React.useState(false);
+            const [error, setError] = React.useState(null);
+            const [searched, setSearched] = React.useState(false);
+            const [expandedId, setExpandedId] = React.useState(null);
+            const [relatedMap, setRelatedMap] = React.useState({});
+            const [loadingRelated, setLoadingRelated] = React.useState(null);
+            const [copiedState, setCopiedState] = React.useState(null);
+            const [chapters, setChapters] = React.useState([]);
+            const [totalParas, setTotalParas] = React.useState(0);
+            const [selectedChapter, setSelectedChapter] = React.useState("");
+            const [sidebarOpen, setSidebarOpen] = React.useState(false);
+            const [darkMode, setDarkMode] = React.useState(true);
+            const [suggestions, setSuggestions] = React.useState([]);
+            const [showSuggestions, setShowSuggestions] = React.useState(false);
+            const [elapsedMs, setElapsedMs] = React.useState(0);
+            const [focusedResult, setFocusedResult] = React.useState(-1);
+            const [showShortcuts, setShowShortcuts] = React.useState(false);
+            const [analyzeEnabled, setAnalyzeEnabled] = React.useState(false);
+            const [analysisMap, setAnalysisMap] = React.useState({});
+            const [loadingAnalysis, setLoadingAnalysis] = React.useState(null);
+            const [deepAnalysis, setDeepAnalysis] = React.useState(null);
+            const [loadingDeep, setLoadingDeep] = React.useState(false);
+            const [showDeepAnalysis, setShowDeepAnalysis] = React.useState(false);
+
+            const searchRef = React.useRef(null);
+
+            // Load chapters and analyze status on mount
+            React.useEffect(() => {
+                fetch("/chapters").then(r => r.json()).then(d => {
+                    setChapters(d.chapters);
+                    setTotalParas(d.total);
+                });
+                fetch("/analyze/status").then(r => r.json()).then(d => {
+                    setAnalyzeEnabled(d.enabled);
+                });
+            }, []);
+
+            // Theme toggle
+            React.useEffect(() => {
+                document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
+            }, [darkMode]);
+
+            // Keyboard shortcuts
+            React.useEffect(() => {
+                function handleKey(e) {
+                    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+                        if (e.key === "Escape") {
+                            searchRef.current?.blur();
+                            setShowSuggestions(false);
+                        }
+                        return;
+                    }
+                    if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
+                    if (e.key === "Escape") { setQuery(""); setSearched(false); setResults([]); setExpandedId(null); setDeepAnalysis(null); setShowDeepAnalysis(false); }
+                    if (e.key === "ArrowDown" && results.length) { e.preventDefault(); setFocusedResult(p => Math.min(p + 1, results.length - 1)); }
+                    if (e.key === "ArrowUp" && results.length) { e.preventDefault(); setFocusedResult(p => Math.max(p - 1, 0)); }
+                    if (e.key === "c" && focusedResult >= 0 && results[focusedResult]) {
+                        copyToClipboard(getCitationFormal(results[focusedResult]), `kb-${results[focusedResult].id}`);
+                    }
+                }
+                window.addEventListener("keydown", handleKey);
+                return () => window.removeEventListener("keydown", handleKey);
+            }, [results, focusedResult]);
+
+            // Scroll focused result into view
+            React.useEffect(() => {
+                if (focusedResult >= 0) {
+                    document.getElementById(`result-${focusedResult}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }
+            }, [focusedResult]);
+
+            function handleQueryChange(val) {
+                setQuery(val);
+                if (val.trim().length > 0) {
+                    const lower = val.toLowerCase();
+                    const matched = SUGGESTIONS.filter(s => s.toLowerCase().includes(lower)).slice(0, 5);
+                    setSuggestions(matched);
+                    setShowSuggestions(matched.length > 0);
+                } else {
+                    setShowSuggestions(false);
+                }
+            }
+
+            async function handleSearch(e, overrideQuery) {
+                if (e) e.preventDefault();
+                const q = overrideQuery || query;
+                if (!q.trim()) return;
+                setQuery(q);
+                setShowSuggestions(false);
+                setLoading(true);
+                setError(null);
+                setSearched(true);
+                setExpandedId(null);
+                setFocusedResult(-1);
+                setDeepAnalysis(null);
+                setShowDeepAnalysis(false);
+
+                try {
+                    let url = `/search?q=${encodeURIComponent(q.trim())}&n=10`;
+                    if (selectedChapter) url += `&chapter=${encodeURIComponent(selectedChapter)}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+                    const data = await res.json();
+                    setResults(data.results);
+                    setElapsedMs(data.elapsed_ms || 0);
+                } catch (err) {
+                    setError(err.message);
+                    setResults([]);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            async function handleExpand(item) {
+                const id = item.id;
+                if (expandedId === id) { setExpandedId(null); return; }
+                setExpandedId(id);
+                if (!relatedMap[id]) {
+                    setLoadingRelated(id);
+                    try {
+                        const res = await fetch(`/related?id=${encodeURIComponent(id)}&n=3`);
+                        const data = await res.json();
+                        setRelatedMap(prev => ({ ...prev, [id]: data.results }));
+                    } catch { setRelatedMap(prev => ({ ...prev, [id]: [] })); }
+                    finally { setLoadingRelated(null); }
+                }
+            }
+
+            async function handleAnalyze(item) {
+                const id = item.id;
+                if (analysisMap[id]) return;
+                setLoadingAnalysis(id);
+                try {
+                    const res = await fetch("/analyze", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query, paragraphs: [{ id: item.para_ref || item.id, text: item.text, para_ref: item.para_ref }] })
+                    });
+                    if (!res.ok) throw new Error("Analysis failed");
+                    const data = await res.json();
+                    setAnalysisMap(prev => ({ ...prev, [id]: data.analysis }));
+                } catch {
+                    setAnalysisMap(prev => ({ ...prev, [id]: "ERROR: Analysis unavailable. Check your OpenAI API key in the .env file." }));
+                } finally { setLoadingAnalysis(null); }
+            }
+
+            async function handleDeepAnalysis() {
+                if (loadingDeep || deepAnalysis) { setShowDeepAnalysis(!showDeepAnalysis); return; }
+                setLoadingDeep(true);
+                setShowDeepAnalysis(true);
+                try {
+                    const top5 = results.slice(0, 5).map(r => ({ id: r.para_ref || r.id, text: r.text, para_ref: r.para_ref }));
+                    const res = await fetch("/analyze", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query, paragraphs: top5 })
+                    });
+                    if (!res.ok) throw new Error("Analysis failed");
+                    const data = await res.json();
+                    setDeepAnalysis(data.analysis);
+                } catch {
+                    setDeepAnalysis("ERROR: Analysis unavailable. Check your OpenAI API key in the .env file.");
+                } finally { setLoadingDeep(false); }
+            }
+
+            function getParaLabel(item) {
+                return item.para_ref ? `Para ${item.para_ref}` : `Page ${item.page}`;
+            }
+
+            function getCitationFormal(item) {
+                const ref = item.para_ref ? `Para ${item.para_ref}` : `p. ${item.page}`;
+                return `OECD (2022), Transfer Pricing Guidelines for Multinational Enterprises and Tax Administrations, ${ref}`;
+            }
+
+            function getCitationTP(item) {
+                const ref = item.para_ref ? `paragraph ${item.para_ref}` : `p. ${item.page}`;
+                const firstSentence = item.text.split(/[.!?]/)[0].trim().replace(/^\d{1,2}\.\d{1,3}\.?\s*/, "");
+                return `In accordance with ${ref} of the OECD Transfer Pricing Guidelines (2022), "${firstSentence}..."`;
+            }
+
+            async function copyToClipboard(text, key) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                } catch {
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                }
+                setCopiedState(key);
+                setTimeout(() => setCopiedState(null), 2000);
+            }
+
+            function exportResults() {
+                const lines = [`Query: ${query}`, ""];
+                results.forEach(r => {
+                    const ref = r.para_ref ? `Para ${r.para_ref}` : `Page ${r.page}`;
+                    lines.push("---");
+                    lines.push(`${ref} | ${r.chapter} | Page ${r.page}`);
+                    lines.push(r.text);
+                    lines.push("");
+                });
+                copyToClipboard(lines.join("\n"), "export-all");
+            }
+
+            function getSimilarityColor(score) {
+                if (score >= 0.75) return "var(--color-high)";
+                if (score >= 0.5) return "var(--color-med)";
+                return "var(--color-low)";
+            }
+
+            function highlightText(text, searchQuery) {
+                if (!searchQuery || !searchQuery.trim()) return text;
+                const words = searchQuery.trim().split(/\s+/).filter(w => w.length > 1);
+                if (!words.length) return text;
+                const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+                const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+                const parts = text.split(pattern);
+                return parts.map((part, i) =>
+                    pattern.test(part) ? React.createElement("mark", { key: i, className: "highlight" }, part) : part
+                );
+            }
+
+            function renderMarkdown(md) {
+                if (!md) return null;
+                const lines = md.split("\n");
+                const elements = [];
+                let i = 0;
+                while (i < lines.length) {
+                    const line = lines[i];
+                    if (line.startsWith("## ")) {
+                        elements.push(React.createElement("h3", { key: i, className: "analysis-heading" }, line.slice(3)));
+                    } else if (line.startsWith("### ")) {
+                        elements.push(React.createElement("h4", { key: i, className: "analysis-subheading" }, line.slice(4)));
+                    } else if (line.startsWith("- ")) {
+                        elements.push(React.createElement("li", { key: i, className: "analysis-li" }, line.slice(2)));
+                    } else if (line.trim() === "") {
+                        elements.push(React.createElement("br", { key: i }));
+                    } else {
+                        // Bold text
+                        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+                        const rendered = parts.map((p, j) => {
+                            if (p.startsWith("**") && p.endsWith("**")) {
+                                return React.createElement("strong", { key: j }, p.slice(2, -2));
+                            }
+                            return p;
+                        });
+                        elements.push(React.createElement("p", { key: i, className: "analysis-p" }, ...rendered));
+                    }
+                    i++;
+                }
+                return elements;
+            }
+
+            // Analytics computations
+            const highCount = results.filter(r => r.similarity >= 0.75).length;
+            const medCount = results.filter(r => r.similarity >= 0.5 && r.similarity < 0.75).length;
+            const lowCount = results.filter(r => r.similarity < 0.5).length;
+            const matchedChapters = [...new Set(results.map(r => r.chapter))];
+
+            function handleChapterClick(key) {
+                setSelectedChapter(key === selectedChapter ? "" : key);
+                setSidebarOpen(false);
+                if (searched && query) {
+                    // Re-search with new filter after state update
+                    setTimeout(() => {
+                        const newChapter = key === selectedChapter ? "" : key;
+                        let url = `/search?q=${encodeURIComponent(query.trim())}&n=10`;
+                        if (newChapter) url += `&chapter=${encodeURIComponent(newChapter)}`;
+                        fetch(url).then(r => r.json()).then(data => {
+                            setResults(data.results);
+                            setElapsedMs(data.elapsed_ms || 0);
+                            setExpandedId(null);
+                        });
+                    }, 0);
+                }
+            }
+
+            return (
+                <div className="app-layout">
+                    {/* Mobile sidebar toggle */}
+                    <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                        {sidebarOpen ? "\u2715" : "\u2630"} Chapters
+                    </button>
+
+                    {/* Sidebar */}
+                    <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+                        <h2 className="sidebar-title">Chapters</h2>
+                        <div
+                            className={`chapter-item ${selectedChapter === "" ? "active" : ""}`}
+                            onClick={() => handleChapterClick("")}
+                        >
+                            <span className="chapter-name">All Chapters</span>
+                            <span className="chapter-count">{totalParas}</span>
+                        </div>
+                        {chapters.map(ch => (
+                            <div
+                                key={ch.key}
+                                className={`chapter-item ${selectedChapter === ch.key ? "active" : ""}`}
+                                onClick={() => handleChapterClick(ch.key)}
+                            >
+                                <span className="chapter-name">{ch.key.replace("Chapter ", "Ch. ")}: {ch.name}</span>
+                                <span className="chapter-count">{ch.count}</span>
+                            </div>
+                        ))}
+                    </aside>
+
+                    {/* Main content */}
+                    <main className="main-content">
+                        {/* Top bar */}
+                        <div className="top-bar">
+                            <div className="top-bar-left">
+                                <button
+                                    className="theme-toggle"
+                                    onClick={() => setDarkMode(!darkMode)}
+                                    title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                                >
+                                    {darkMode ? "\u2600" : "\u263E"}
+                                </button>
+                            </div>
+                            <div className="top-bar-right">
+                                <div
+                                    className="shortcuts-container"
+                                    onMouseEnter={() => setShowShortcuts(true)}
+                                    onMouseLeave={() => setShowShortcuts(false)}
+                                >
+                                    <span className="shortcuts-icon">?</span>
+                                    {showShortcuts && (
+                                        <div className="shortcuts-panel">
+                                            <div className="shortcut-row"><kbd>/</kbd> Focus search</div>
+                                            <div className="shortcut-row"><kbd>Esc</kbd> Clear search</div>
+                                            <div className="shortcut-row"><kbd>&uarr;&darr;</kbd> Navigate results</div>
+                                            <div className="shortcut-row"><kbd>C</kbd> Copy citation</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <header>
+                            <h1>OECD TP Guidelines Intelligence</h1>
+                            <p className="subtitle">Semantic search & AI-powered analysis across {totalParas.toLocaleString()} paragraphs of the 2022 OECD Transfer Pricing Guidelines</p>
+                        </header>
+
+                        {/* Search form */}
+                        <form onSubmit={handleSearch} className="search-form">
+                            <div className="search-wrapper">
+                                <input
+                                    ref={searchRef}
+                                    type="text"
+                                    value={query}
+                                    onChange={(e) => handleQueryChange(e.target.value)}
+                                    onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    placeholder="Search the OECD Transfer Pricing Guidelines..."
+                                    className="search-input"
+                                    autoFocus
+                                />
+                                {showSuggestions && (
+                                    <div className="suggestions-dropdown">
+                                        {suggestions.map((s, i) => (
+                                            <div
+                                                key={i}
+                                                className="suggestion-item"
+                                                onMouseDown={() => { handleSearch(null, s); }}
+                                            >
+                                                {s}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <button type="submit" className="search-button" disabled={loading}>
+                                {loading ? "Searching..." : "Search"}
+                            </button>
+                        </form>
+
+                        {/* Empty state with example queries */}
+                        {!searched && !loading && (
+                            <div className="empty-state">
+                                <p className="empty-label">Try searching for:</p>
+                                <div className="example-queries">
+                                    {EXAMPLE_QUERIES.map((eq, i) => (
+                                        <button
+                                            key={i}
+                                            className="example-query"
+                                            onClick={() => handleSearch(null, eq)}
+                                        >
+                                            {eq}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="error">
+                                <strong>Error:</strong> {error}
+                                <p>Make sure the backend server is running.</p>
+                            </div>
+                        )}
+
+                        {/* Analytics bar */}
+                        {searched && !loading && results.length > 0 && (
+                            <div className="analytics-bar">
+                                <div className="analytics-left">
+                                    <span className="analytics-count">{results.length} results</span>
+                                    <span className="analytics-time">{elapsedMs}ms</span>
+                                    {selectedChapter && <span className="analytics-filter">Filtered: {selectedChapter}</span>}
+                                </div>
+                                <div className="analytics-center">
+                                    <span className="analytics-dots">
+                                        {matchedChapters.map((ch, i) => (
+                                            <span key={i} className="chapter-dot" title={ch}></span>
+                                        ))}
+                                    </span>
+                                </div>
+                                <div className="analytics-right">
+                                    <span className="relevance-tag high">{highCount} high</span>
+                                    <span className="relevance-tag med">{medCount} med</span>
+                                    <span className="relevance-tag low">{lowCount} low</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Action buttons */}
+                        {searched && !loading && results.length > 0 && (
+                            <div className="action-bar">
+                                {analyzeEnabled && (
+                                    <button
+                                        className="deep-analysis-btn"
+                                        onClick={handleDeepAnalysis}
+                                        disabled={loadingDeep}
+                                    >
+                                        {loadingDeep ? "Generating PhD-level analysis..." : (deepAnalysis ? (showDeepAnalysis ? "Hide Deep Analysis" : "Show Deep Analysis") : "Deep Analysis")}
+                                    </button>
+                                )}
+                                <button
+                                    className="export-btn"
+                                    onClick={exportResults}
+                                >
+                                    {copiedState === "export-all" ? "Copied!" : "Export Results"}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Deep analysis panel */}
+                        {showDeepAnalysis && (deepAnalysis || loadingDeep) && (
+                            <div className="analysis-panel deep-panel">
+                                <div className="analysis-panel-header">
+                                    <span className="analysis-panel-title">PhD-Level Deep Analysis</span>
+                                    {deepAnalysis && (
+                                        <button
+                                            className="cite-btn cite-btn-sm"
+                                            onClick={() => copyToClipboard(deepAnalysis, "copy-deep")}
+                                        >
+                                            {copiedState === "copy-deep" ? "Copied!" : "Copy Analysis"}
+                                        </button>
+                                    )}
+                                </div>
+                                {loadingDeep && !deepAnalysis && (
+                                    <div className="analysis-loading">
+                                        <div className="spinner"></div>
+                                        <span>Generating PhD-level analysis...</span>
+                                    </div>
+                                )}
+                                {deepAnalysis && (
+                                    <div className="analysis-content">{renderMarkdown(deepAnalysis)}</div>
+                                )}
+                            </div>
+                        )}
+
+                        {searched && !loading && !error && results.length === 0 && (
+                            <p className="no-results">No results found.</p>
+                        )}
+
+                        {/* Results */}
+                        <div className="results">
+                            {results.map((r, i) => (
+                                <div
+                                    key={r.id}
+                                    id={`result-${i}`}
+                                    className={`result-card ${expandedId === r.id ? "expanded" : ""} ${focusedResult === i ? "focused" : ""}`}
+                                    style={{ animationDelay: `${i * 50}ms` }}
+                                >
+                                    <div className="result-header" onClick={() => handleExpand(r)} style={{ cursor: "pointer" }}>
+                                        <span className="result-rank">#{i + 1}</span>
+                                        <span className="result-para-ref">{getParaLabel(r)}</span>
+                                        <span className="result-meta">{r.chapter} · Page {r.page}</span>
+                                        <span className="similarity-badge" style={{ backgroundColor: getSimilarityColor(r.similarity) }}>
+                                            {(r.similarity * 100).toFixed(1)}%
+                                        </span>
+                                        <span className="expand-icon">{expandedId === r.id ? "\u25B2" : "\u25BC"}</span>
+                                    </div>
+                                    <p className="result-text">{highlightText(r.text, query)}</p>
+
+                                    {expandedId === r.id && (
+                                        <div className="expanded-section">
+                                            <div className="citation-buttons">
+                                                <button className="cite-btn" onClick={(e) => { e.stopPropagation(); copyToClipboard(getCitationFormal(r), `formal-${r.id}`); }}>
+                                                    {copiedState === `formal-${r.id}` ? "Copied!" : "Copy Citation"}
+                                                </button>
+                                                <button className="cite-btn cite-btn-tp" onClick={(e) => { e.stopPropagation(); copyToClipboard(getCitationTP(r), `tp-${r.id}`); }}>
+                                                    {copiedState === `tp-${r.id}` ? "Copied!" : "Copy for TP Report"}
+                                                </button>
+                                                {analyzeEnabled && (
+                                                    <button
+                                                        className="cite-btn cite-btn-analyze"
+                                                        onClick={(e) => { e.stopPropagation(); handleAnalyze(r); }}
+                                                        disabled={loadingAnalysis === r.id || !!analysisMap[r.id]}
+                                                    >
+                                                        {loadingAnalysis === r.id ? "Analyzing..." : (analysisMap[r.id] ? "Analysis Ready" : "Analyze")}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="citation-preview">
+                                                <div className="preview-block">
+                                                    <span className="preview-label">Citation:</span>
+                                                    <span className="preview-text">{getCitationFormal(r)}</span>
+                                                </div>
+                                                <div className="preview-block">
+                                                    <span className="preview-label">TP Report:</span>
+                                                    <span className="preview-text">{getCitationTP(r)}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Single paragraph analysis */}
+                                            {(loadingAnalysis === r.id || analysisMap[r.id]) && (
+                                                <div className="analysis-panel">
+                                                    <div className="analysis-panel-header">
+                                                        <span className="analysis-panel-title">PhD-Level Analysis</span>
+                                                        {analysisMap[r.id] && (
+                                                            <button className="cite-btn cite-btn-sm" onClick={() => copyToClipboard(analysisMap[r.id], `copy-analysis-${r.id}`)}>
+                                                                {copiedState === `copy-analysis-${r.id}` ? "Copied!" : "Copy Analysis"}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {loadingAnalysis === r.id && !analysisMap[r.id] && (
+                                                        <div className="analysis-loading">
+                                                            <div className="spinner"></div>
+                                                            <span>Generating PhD-level analysis...</span>
+                                                        </div>
+                                                    )}
+                                                    {analysisMap[r.id] && (
+                                                        <div className="analysis-content">{renderMarkdown(analysisMap[r.id])}</div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Related paragraphs */}
+                                            <div className="related-section">
+                                                <h3 className="related-title">Related Paragraphs</h3>
+                                                {loadingRelated === r.id && <p className="related-loading">Finding related paragraphs...</p>}
+                                                {relatedMap[r.id] && relatedMap[r.id].length > 0 && (
+                                                    <div className="related-list">
+                                                        {relatedMap[r.id].map(rel => (
+                                                            <div key={rel.id} className="related-card">
+                                                                <div className="related-header">
+                                                                    <span className="related-ref">{rel.para_ref ? `Para ${rel.para_ref}` : `Page ${rel.page}`}</span>
+                                                                    <span className="related-meta">{rel.chapter} · Page {rel.page}</span>
+                                                                    <span className="similarity-badge similarity-badge-sm" style={{ backgroundColor: getSimilarityColor(rel.similarity) }}>
+                                                                        {(rel.similarity * 100).toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                                <p className="related-text">{highlightText(rel.text, query)}</p>
+                                                                <div className="related-actions">
+                                                                    <button className="cite-btn cite-btn-sm" onClick={() => copyToClipboard(getCitationFormal(rel), `formal-${rel.id}`)}>
+                                                                        {copiedState === `formal-${rel.id}` ? "Copied!" : "Copy Citation"}
+                                                                    </button>
+                                                                    <button className="cite-btn cite-btn-tp cite-btn-sm" onClick={() => copyToClipboard(getCitationTP(rel), `tp-${rel.id}`)}>
+                                                                        {copiedState === `tp-${rel.id}` ? "Copied!" : "Copy for TP Report"}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {relatedMap[r.id] && relatedMap[r.id].length === 0 && (
+                                                    <p className="related-loading">No related paragraphs found.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <footer>
+                            <p>Built by Averise Advisors · Powered by AI · Data never leaves your machine</p>
+                        </footer>
+                    </main>
+
+                    {/* Toast notification */}
+                    {copiedState && (
+                        <div className="toast">Copied to clipboard!</div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
+    </script>
+</body>
+</html>

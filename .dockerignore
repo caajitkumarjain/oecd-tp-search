@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.md
+!deploy.md
+render.yaml
+backend/data/
+.env
