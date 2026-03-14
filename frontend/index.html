@@ -62,10 +62,16 @@
             const [deepAnalysis, setDeepAnalysis] = React.useState(null);
             const [loadingDeep, setLoadingDeep] = React.useState(false);
             const [showDeepAnalysis, setShowDeepAnalysis] = React.useState(false);
+            const [showEmailModal, setShowEmailModal] = React.useState(false);
+            const [userToken, setUserToken] = React.useState(null);
+            const [emailForm, setEmailForm] = React.useState({ email: "", name: "", company: "" });
+            const [emailError, setEmailError] = React.useState("");
+            const [emailSubmitting, setEmailSubmitting] = React.useState(false);
+            const [pendingAnalysisAction, setPendingAnalysisAction] = React.useState(null);
 
             const searchRef = React.useRef(null);
 
-            // Load chapters and analyze status on mount
+            // Load chapters, analyze status, and stored registration on mount
             React.useEffect(() => {
                 fetch("/chapters").then(r => r.json()).then(d => {
                     setChapters(d.chapters);
@@ -74,6 +80,14 @@
                 fetch("/analyze/status").then(r => r.json()).then(d => {
                     setAnalyzeEnabled(d.enabled);
                 });
+                // Restore registration from localStorage
+                try {
+                    const stored = localStorage.getItem("oecd_tp_user");
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (parsed.token) setUserToken(parsed.token);
+                    }
+                } catch {}
             }, []);
 
             // Theme toggle
@@ -167,14 +181,56 @@
                 }
             }
 
-            async function handleAnalyze(item) {
+            function requireRegistration(action) {
+                if (userToken) return true;
+                setPendingAnalysisAction(() => action);
+                setShowEmailModal(true);
+                return false;
+            }
+
+            async function handleEmailSubmit(e) {
+                e.preventDefault();
+                const email = emailForm.email.trim();
+                if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+                    setEmailError("Please enter a valid email address.");
+                    return;
+                }
+                setEmailError("");
+                setEmailSubmitting(true);
+                try {
+                    const res = await fetch("/register", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(emailForm)
+                    });
+                    if (!res.ok) throw new Error("Registration failed");
+                    const data = await res.json();
+                    const token = data.token;
+                    setUserToken(token);
+                    localStorage.setItem("oecd_tp_user", JSON.stringify({
+                        email: emailForm.email, name: emailForm.name,
+                        company: emailForm.company, token, timestamp: Date.now()
+                    }));
+                    setShowEmailModal(false);
+                    // Execute the pending analysis action
+                    if (pendingAnalysisAction) {
+                        setTimeout(() => pendingAnalysisAction(token), 100);
+                        setPendingAnalysisAction(null);
+                    }
+                } catch {
+                    setEmailError("Registration failed. Please try again.");
+                } finally { setEmailSubmitting(false); }
+            }
+
+            async function executeAnalyze(item, token) {
+                const tk = token || userToken;
                 const id = item.id;
                 if (analysisMap[id]) return;
                 setLoadingAnalysis(id);
                 try {
                     const res = await fetch("/analyze", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", "X-User-Token": tk },
                         body: JSON.stringify({ query, paragraphs: [{ id: item.para_ref || item.id, text: item.text, para_ref: item.para_ref }] })
                     });
                     if (!res.ok) throw new Error("Analysis failed");
@@ -185,15 +241,21 @@
                 } finally { setLoadingAnalysis(null); }
             }
 
-            async function handleDeepAnalysis() {
-                if (loadingDeep || deepAnalysis) { setShowDeepAnalysis(!showDeepAnalysis); return; }
+            function handleAnalyze(item) {
+                if (analysisMap[item.id]) return;
+                if (!requireRegistration((tk) => executeAnalyze(item, tk))) return;
+                executeAnalyze(item);
+            }
+
+            async function executeDeepAnalysis(token) {
+                const tk = token || userToken;
                 setLoadingDeep(true);
                 setShowDeepAnalysis(true);
                 try {
                     const top5 = results.slice(0, 5).map(r => ({ id: r.para_ref || r.id, text: r.text, para_ref: r.para_ref }));
                     const res = await fetch("/analyze", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", "X-User-Token": tk },
                         body: JSON.stringify({ query, paragraphs: top5 })
                     });
                     if (!res.ok) throw new Error("Analysis failed");
@@ -202,6 +264,12 @@
                 } catch {
                     setDeepAnalysis("ERROR: Analysis unavailable. Check your OpenAI API key in the .env file.");
                 } finally { setLoadingDeep(false); }
+            }
+
+            function handleDeepAnalysis() {
+                if (loadingDeep || deepAnalysis) { setShowDeepAnalysis(!showDeepAnalysis); return; }
+                if (!requireRegistration((tk) => executeDeepAnalysis(tk))) return;
+                executeDeepAnalysis();
             }
 
             function getParaLabel(item) {
@@ -475,7 +543,7 @@
                                         onClick={handleDeepAnalysis}
                                         disabled={loadingDeep}
                                     >
-                                        {loadingDeep ? "Generating PhD-level analysis..." : (deepAnalysis ? (showDeepAnalysis ? "Hide Deep Analysis" : "Show Deep Analysis") : "Deep Analysis")}
+                                        {!userToken && "\uD83D\uDD12 "}{loadingDeep ? "Generating PhD-level analysis..." : (deepAnalysis ? (showDeepAnalysis ? "Hide Deep Analysis" : "Show Deep Analysis") : "Deep Analysis")}
                                     </button>
                                 )}
                                 <button
@@ -552,7 +620,7 @@
                                                         onClick={(e) => { e.stopPropagation(); handleAnalyze(r); }}
                                                         disabled={loadingAnalysis === r.id || !!analysisMap[r.id]}
                                                     >
-                                                        {loadingAnalysis === r.id ? "Analyzing..." : (analysisMap[r.id] ? "Analysis Ready" : "Analyze")}
+                                                        {loadingAnalysis === r.id ? "Analyzing..." : (analysisMap[r.id] ? "Analysis Ready" : (!userToken ? "\uD83D\uDD12 Analyze" : "Analyze"))}
                                                     </button>
                                                 )}
                                             </div>
@@ -633,6 +701,48 @@
                             <p>Built by Averise Advisors · Powered by AI · Data never leaves your machine</p>
                         </footer>
                     </main>
+
+                    {/* Email gate modal */}
+                    {showEmailModal && (
+                        <div className="modal-backdrop" onClick={() => setShowEmailModal(false)}>
+                            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                                <button className="modal-close" onClick={() => setShowEmailModal(false)}>&times;</button>
+                                <div className="modal-icon">&#x2728;</div>
+                                <h2 className="modal-title">Unlock PhD-Level Analysis</h2>
+                                <p className="modal-subtitle">Get AI-powered structural analysis of OECD Transfer Pricing Guidelines — powered by GPT-4o with transfer pricing expertise.</p>
+                                <form onSubmit={handleEmailSubmit} className="modal-form">
+                                    <input
+                                        type="email"
+                                        placeholder="Your email address *"
+                                        value={emailForm.email}
+                                        onChange={(e) => setEmailForm(prev => ({ ...prev, email: e.target.value }))}
+                                        className="modal-input"
+                                        required
+                                        autoFocus
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Your name (optional)"
+                                        value={emailForm.name}
+                                        onChange={(e) => setEmailForm(prev => ({ ...prev, name: e.target.value }))}
+                                        className="modal-input"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Company (optional)"
+                                        value={emailForm.company}
+                                        onChange={(e) => setEmailForm(prev => ({ ...prev, company: e.target.value }))}
+                                        className="modal-input"
+                                    />
+                                    {emailError && <p className="modal-error">{emailError}</p>}
+                                    <button type="submit" className="modal-submit" disabled={emailSubmitting}>
+                                        {emailSubmitting ? "Unlocking..." : "Unlock Analysis"}
+                                    </button>
+                                </form>
+                                <p className="modal-disclaimer">No spam. Used only for transfer pricing insights from Averise Advisors.</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Toast notification */}
                     {copiedState && (

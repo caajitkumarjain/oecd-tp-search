@@ -12,13 +12,17 @@ Endpoints:
   GET   /                                             — frontend
 """
 
+import hashlib
+import json
 import os
+import re
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import chromadb
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, Header, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -35,6 +39,34 @@ FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 COLLECTION_NAME = "oecd_tp_guidelines"
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+LEADS_FILE = os.path.join(CHROMA_DIR, "leads.json")
+
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+def make_token(email: str) -> str:
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:32]
+
+
+def load_leads() -> list[dict]:
+    if not os.path.exists(LEADS_FILE):
+        return []
+    with open(LEADS_FILE, "r") as f:
+        return json.load(f)
+
+
+def save_leads(leads: list[dict]):
+    os.makedirs(os.path.dirname(LEADS_FILE), exist_ok=True)
+    with open(LEADS_FILE, "w") as f:
+        json.dump(leads, f, indent=2)
+
+
+def find_lead_by_token(leads: list[dict], token: str) -> dict | None:
+    for lead in leads:
+        if make_token(lead["email"]) == token:
+            return lead
+    return None
+
 
 ANALYSIS_SYSTEM_PROMPT = """You are an elite transfer pricing analyst operating at PhD level — producing analysis that exceeds what OECD Guidelines drafters, Big 4 partners, and published academics have articulated.
 
@@ -276,15 +308,67 @@ def analyze_status():
     return {"enabled": openai_client is not None}
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    name: str = ""
+    company: str = ""
+
+
+@app.post("/register")
+async def register(req: RegisterRequest, request: Request):
+    email = req.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=422, detail="Invalid email format")
+
+    leads = load_leads()
+
+    # Deduplicate
+    for lead in leads:
+        if lead["email"] == email:
+            return {"success": True, "token": make_token(email)}
+
+    ip = request.client.host if request.client else "unknown"
+    leads.append({
+        "email": email,
+        "name": req.name.strip(),
+        "company": req.company.strip(),
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+        "ip": ip,
+        "analysis_count": 0,
+        "last_analysis": None,
+    })
+    save_leads(leads)
+
+    return {"success": True, "token": make_token(email)}
+
+
+@app.get("/leads/count")
+def leads_count():
+    leads = load_leads()
+    return {"count": len(leads)}
+
+
 class AnalyzeRequest(BaseModel):
     query: str
     paragraphs: list[dict]
 
 
 @app.post("/analyze")
-async def analyze(req: AnalyzeRequest):
+async def analyze(
+    req: AnalyzeRequest,
+    x_user_token: str = Header(None),
+):
     if not openai_client:
         raise HTTPException(status_code=503, detail="API key not configured")
+
+    if not x_user_token:
+        raise HTTPException(status_code=403, detail="Please register to access analysis")
+
+    # Validate token and track usage
+    leads = load_leads()
+    lead = find_lead_by_token(leads, x_user_token)
+    if not lead:
+        raise HTTPException(status_code=403, detail="Invalid token. Please register again.")
 
     # Build user message from paragraphs
     para_texts = []
@@ -304,6 +388,11 @@ async def analyze(req: AnalyzeRequest):
         temperature=0.7,
         max_tokens=4000,
     )
+
+    # Update usage tracking
+    lead["analysis_count"] = lead.get("analysis_count", 0) + 1
+    lead["last_analysis"] = datetime.now(timezone.utc).isoformat()
+    save_leads(leads)
 
     return {"analysis": response.choices[0].message.content}
 
