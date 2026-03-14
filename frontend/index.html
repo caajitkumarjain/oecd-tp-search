@@ -27,6 +27,14 @@
             "comparability adjustments","functional analysis","value chain analysis"
         ];
 
+        const ADVISORY_EXAMPLES = [
+            "How should I price a management fee from a UAE parent to an Indian subsidiary?",
+            "What is the OECD approach to pricing financial guarantees?",
+            "How do I apply DEMPE analysis to marketing intangibles developed by a local distributor?",
+            "What are the documentation requirements for low value-adding intra-group services?",
+            "How should business restructuring compensation be calculated when functions transfer to a principal company?"
+        ];
+
         const EXAMPLE_QUERIES = [
             "DEMPE functions for marketing intangibles",
             "Location specific advantages in developing countries",
@@ -68,6 +76,13 @@
             const [emailError, setEmailError] = React.useState("");
             const [emailSubmitting, setEmailSubmitting] = React.useState(false);
             const [pendingAnalysisAction, setPendingAnalysisAction] = React.useState(null);
+            const [mode, setMode] = React.useState("search");
+            const [advisoryQuestion, setAdvisoryQuestion] = React.useState("");
+            const [advisoryResult, setAdvisoryResult] = React.useState(null);
+            const [advisoryLoading, setAdvisoryLoading] = React.useState(false);
+            const [advisoryError, setAdvisoryError] = React.useState(null);
+            const [showOecdRefs, setShowOecdRefs] = React.useState(false);
+            const [showWebSources, setShowWebSources] = React.useState(false);
 
             const searchRef = React.useRef(null);
 
@@ -280,6 +295,36 @@
                 executeDeepAnalysis();
             }
 
+            async function executeAdvisory(token) {
+                const tk = token || userToken;
+                setAdvisoryLoading(true);
+                setAdvisoryError(null);
+                setAdvisoryResult(null);
+                setShowOecdRefs(false);
+                setShowWebSources(false);
+                try {
+                    const res = await fetch("/advisory", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-User-Token": tk },
+                        body: JSON.stringify({ question: advisoryQuestion })
+                    });
+                    if (!res.ok) throw new Error("Advisory request failed");
+                    const data = await res.json();
+                    setAdvisoryResult(data);
+                } catch (err) {
+                    setAdvisoryError(err.message || "Advisory unavailable. Check your Anthropic API key.");
+                } finally { setAdvisoryLoading(false); }
+            }
+
+            function handleAdvisorySubmit(e, overrideQ) {
+                if (e) e.preventDefault();
+                const q = overrideQ || advisoryQuestion;
+                if (!q.trim()) return;
+                setAdvisoryQuestion(q);
+                if (!requireRegistration((tk) => executeAdvisory(tk))) return;
+                executeAdvisory();
+            }
+
             function getParaLabel(item) {
                 return item.para_ref ? `Para ${item.para_ref}` : `Page ${item.page}`;
             }
@@ -461,8 +506,14 @@
                             <p className="subtitle">Semantic search & AI-powered analysis across {totalParas.toLocaleString()} paragraphs of the 2022 OECD Transfer Pricing Guidelines</p>
                         </header>
 
-                        {/* Search form */}
-                        <form onSubmit={handleSearch} className="search-form">
+                        {/* Mode toggle */}
+                        <div className="mode-toggle">
+                            <button className={`mode-btn ${mode === "search" ? "active" : ""}`} onClick={() => setMode("search")}>Search</button>
+                            <button className={`mode-btn ${mode === "advisory" ? "active" : ""}`} onClick={() => setMode("advisory")}>{!userToken && "\uD83D\uDD12 "}Advisory</button>
+                        </div>
+
+                        {/* Search form — only in search mode */}
+                        {mode === "search" && <form onSubmit={handleSearch} className="search-form">
                             <div className="search-wrapper">
                                 <input
                                     ref={searchRef}
@@ -492,10 +543,106 @@
                             <button type="submit" className="search-button" disabled={loading}>
                                 {loading ? "Searching..." : "Search"}
                             </button>
-                        </form>
+                        </form>}
 
-                        {/* Empty state with example queries */}
-                        {!searched && !loading && (
+                        {/* Advisory mode UI */}
+                        {mode === "advisory" && (
+                            <div className="advisory-mode">
+                                <form onSubmit={handleAdvisorySubmit} className="advisory-form">
+                                    <textarea
+                                        value={advisoryQuestion}
+                                        onChange={(e) => setAdvisoryQuestion(e.target.value)}
+                                        placeholder="Ask any transfer pricing question..."
+                                        className="advisory-input"
+                                        rows={4}
+                                    />
+                                    <button type="submit" className="advisory-submit" disabled={advisoryLoading || !advisoryQuestion.trim()}>
+                                        {advisoryLoading ? "Researching..." : (!userToken ? "\uD83D\uDD12 Get Advisory" : "Get Advisory")}
+                                    </button>
+                                </form>
+
+                                {!advisoryResult && !advisoryLoading && !advisoryError && (
+                                    <div className="empty-state">
+                                        <p className="empty-label">Try asking:</p>
+                                        <div className="example-queries">
+                                            {ADVISORY_EXAMPLES.map((eq, i) => (
+                                                <button key={i} className="example-query" onClick={() => handleAdvisorySubmit(null, eq)}>{eq}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {advisoryLoading && (
+                                    <div className="advisory-loading">
+                                        <div className="advisory-pulse"></div>
+                                        <span>Researching your question across OECD Guidelines and recent developments...</span>
+                                    </div>
+                                )}
+
+                                {advisoryError && (
+                                    <div className="error">
+                                        <strong>Error:</strong> {advisoryError}
+                                    </div>
+                                )}
+
+                                {advisoryResult && (
+                                    <div className="advisory-response">
+                                        <div className="advisory-answer">
+                                            <div className="advisory-answer-header">
+                                                <span className="advisory-answer-title">TP Advisory Response</span>
+                                                <button className="cite-btn cite-btn-sm" onClick={() => copyToClipboard(advisoryResult.answer, "copy-advisory")}>
+                                                    {copiedState === "copy-advisory" ? "Copied!" : "Copy Response"}
+                                                </button>
+                                            </div>
+                                            <div className="analysis-content">{renderMarkdown(advisoryResult.answer)}</div>
+                                        </div>
+
+                                        <div className="advisory-collapsible" onClick={() => setShowOecdRefs(!showOecdRefs)}>
+                                            <span className="advisory-collapsible-title">OECD References ({advisoryResult.oecd_references.length})</span>
+                                            <span className="expand-icon">{showOecdRefs ? "\u25B2" : "\u25BC"}</span>
+                                        </div>
+                                        {showOecdRefs && (
+                                            <div className="advisory-refs-list">
+                                                {advisoryResult.oecd_references.map((ref, i) => (
+                                                    <div key={i} className="related-card">
+                                                        <div className="related-header">
+                                                            <span className="related-ref">{ref.para_ref ? `Para ${ref.para_ref}` : `Page ${ref.page}`}</span>
+                                                            <span className="related-meta">{ref.chapter} · Page {ref.page}</span>
+                                                            <span className="similarity-badge similarity-badge-sm" style={{ backgroundColor: getSimilarityColor(ref.relevance_score) }}>
+                                                                {(ref.relevance_score * 100).toFixed(1)}%
+                                                            </span>
+                                                        </div>
+                                                        <p className="related-text">{ref.text}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {advisoryResult.web_sources.length > 0 && (
+                                            <React.Fragment>
+                                                <div className="advisory-collapsible" onClick={() => setShowWebSources(!showWebSources)}>
+                                                    <span className="advisory-collapsible-title">Web Sources ({advisoryResult.web_sources.length})</span>
+                                                    <span className="expand-icon">{showWebSources ? "\u25B2" : "\u25BC"}</span>
+                                                </div>
+                                                {showWebSources && (
+                                                    <div className="advisory-refs-list">
+                                                        {advisoryResult.web_sources.map((src, i) => (
+                                                            <div key={i} className="web-source-card">
+                                                                <a href={src.url} target="_blank" rel="noopener noreferrer" className="web-source-title">{src.title || src.url}</a>
+                                                                {src.snippet && <p className="web-source-snippet">{src.snippet}</p>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </React.Fragment>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Empty state with example queries — search mode only */}
+                        {mode === "search" && !searched && !loading && (
                             <div className="empty-state">
                                 <p className="empty-label">Try searching for:</p>
                                 <div className="example-queries">
@@ -512,7 +659,7 @@
                             </div>
                         )}
 
-                        {error && (
+                        {mode === "search" && error && (
                             <div className="error">
                                 <strong>Error:</strong> {error}
                                 <p>Make sure the backend server is running.</p>
@@ -520,7 +667,7 @@
                         )}
 
                         {/* Analytics bar */}
-                        {searched && !loading && results.length > 0 && (
+                        {mode === "search" && searched && !loading && results.length > 0 && (
                             <div className="analytics-bar">
                                 <div className="analytics-left">
                                     <span className="analytics-count">{results.length} results</span>
@@ -543,7 +690,7 @@
                         )}
 
                         {/* Action buttons */}
-                        {searched && !loading && results.length > 0 && (
+                        {mode === "search" && searched && !loading && results.length > 0 && (
                             <div className="action-bar">
                                 {analyzeEnabled && (
                                     <button
@@ -564,7 +711,7 @@
                         )}
 
                         {/* Deep analysis panel */}
-                        {showDeepAnalysis && (deepAnalysis || loadingDeep) && (
+                        {mode === "search" && showDeepAnalysis && (deepAnalysis || loadingDeep) && (
                             <div className="analysis-panel deep-panel">
                                 <div className="analysis-panel-header">
                                     <span className="analysis-panel-title">PhD-Level Deep Analysis</span>
@@ -589,12 +736,12 @@
                             </div>
                         )}
 
-                        {searched && !loading && !error && results.length === 0 && (
+                        {mode === "search" && searched && !loading && !error && results.length === 0 && (
                             <p className="no-results">No results found.</p>
                         )}
 
-                        {/* Results */}
-                        <div className="results">
+                        {/* Results — search mode only */}
+                        {mode === "search" && <div className="results">
                             {results.map((r, i) => (
                                 <div
                                     key={r.id}
@@ -703,7 +850,7 @@
                                     )}
                                 </div>
                             ))}
-                        </div>
+                        </div>}
 
                         <footer>
                             <p>Built by Averise Advisors · Powered by AI · Data never leaves your machine</p>

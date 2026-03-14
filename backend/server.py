@@ -7,6 +7,7 @@ Endpoints:
   GET   /chapters                                     — chapter list with counts
   GET   /analyze/status                               — whether AI analysis is available
   POST  /analyze                                      — Claude Sonnet 4.6 PhD-level analysis
+  POST  /advisory                                     — Intelligent TP advisory with web search
   GET   /health                                       — health check
   GET   /stats                                        — collection statistics
   GET   /                                             — frontend
@@ -121,6 +122,43 @@ FORMAT your response EXACTLY as:
 [2-3 future risks/opportunities arising from these paragraphs]
 
 QUALITY GATE before responding: Would a 20-year veteran TP practitioner read this and think "I hadn't seen it this way"? If not, push deeper. Would an OECD Guidelines drafter encounter an idea they had not considered? If not, the analysis is competent but not elite. Rewrite until both tests pass."""
+
+ADVISORY_SYSTEM_PROMPT = """You are an elite transfer pricing advisory engine with 20+ years of Big 4 experience and deep knowledge of the OECD Transfer Pricing Guidelines 2022.
+
+You have been provided with:
+1. RELEVANT OECD GUIDELINES PARAGRAPHS — direct extracts from the 2022 Guidelines
+2. RECENT WEB INTELLIGENCE — recent rulings, guidance, and updates from web search
+3. A CLIENT QUESTION requiring expert transfer pricing advice
+
+YOUR TASK: Provide a PhD-level advisory response that synthesizes all sources.
+
+RESPONSE STRUCTURE (use markdown):
+
+## Advisory Opinion
+[2-3 paragraph direct answer to the question. Lead with the conclusion, then the reasoning. Be specific — cite paragraph numbers, name methods, reference specific OECD chapters.]
+
+## OECD Guidelines Analysis
+[How the relevant Guidelines paragraphs apply to this question. Reference specific paragraph numbers (e.g., "Para 6.48 establishes that..."). Identify any tensions or ambiguities in the Guidelines.]
+
+## Recent Developments
+[What recent rulings, country guidance, or OECD updates are relevant. If web search found relevant developments, synthesize them. If nothing recent is directly relevant, say so.]
+
+## Practical Recommendations
+[3-5 actionable steps. Be specific — not "consider the arm's length principle" but "benchmark the management fee using the Knejfl database or RoyaltyStat, applying the CUP method if comparable third-party management service agreements exist in the relevant jurisdiction."]
+
+## Risk Assessment
+[Key risks: audit exposure, PE risk, documentation gaps, anti-avoidance provisions. Rate overall risk as LOW/MEDIUM/HIGH with explanation.]
+
+## Key OECD References
+[List the specific paragraph numbers referenced, with one-line summaries]
+
+RULES:
+- Never hedge with "it depends" without specifying the exact variables
+- Always cite specific OECD paragraph numbers when referencing the Guidelines
+- If the question involves a specific jurisdiction, note where local rules may deviate from OECD
+- If information is insufficient, say what additional facts you would need
+- Think like a partner presenting to a CFO — authoritative, specific, actionable
+- Do not repeat the question back"""
 
 # Shared state
 model = None
@@ -400,6 +438,119 @@ async def analyze(
     save_leads(leads)
 
     return {"analysis": response.content[0].text}
+
+
+class AdvisoryRequest(BaseModel):
+    question: str
+
+
+@app.post("/advisory")
+async def advisory(
+    req: AdvisoryRequest,
+    x_user_token: str = Header(None),
+):
+    if not anthropic_client:
+        raise HTTPException(status_code=503, detail="API key not configured")
+
+    if not x_user_token:
+        raise HTTPException(status_code=403, detail="Please register to access advisory")
+
+    leads = load_leads()
+    lead = find_lead_by_token(leads, x_user_token)
+    if not lead:
+        raise HTTPException(status_code=403, detail="Invalid token. Please register again.")
+
+    claude_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6-20250514")
+
+    # Step 1: Search OECD Guidelines via ChromaDB
+    query_embedding = model.encode([req.question])[0].tolist()
+    chroma_results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=5,
+        include=["documents", "metadatas", "distances"],
+    )
+
+    oecd_references = []
+    for i in range(len(chroma_results["ids"][0])):
+        distance = chroma_results["distances"][0][i]
+        similarity = 1 - (distance / 2)
+        meta = chroma_results["metadatas"][0][i]
+        oecd_references.append({
+            "id": chroma_results["ids"][0][i],
+            "text": chroma_results["documents"][0][i],
+            "page": meta.get("page"),
+            "chapter": meta.get("chapter", ""),
+            "para_ref": meta.get("para_ref", ""),
+            "relevance_score": round(similarity, 4),
+        })
+
+    # Step 2: Web search via Claude with web_search tool
+    web_sources = []
+    web_context = ""
+    try:
+        web_response = anthropic_client.messages.create(
+            model=claude_model,
+            max_tokens=4096,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            messages=[{
+                "role": "user",
+                "content": f"Search for recent transfer pricing guidance, rulings, or updates relevant to this question: {req.question}. Focus on OECD updates, tax authority guidance, and recent case law. Summarize the key findings."
+            }],
+        )
+
+        # Extract web sources and text from response
+        for block in web_response.content:
+            if block.type == "text":
+                web_context += block.text + "\n"
+            elif block.type == "tool_use":
+                pass  # web_search tool call
+            elif hasattr(block, "type") and block.type == "web_search_tool_result":
+                # Extract search results from the tool result
+                if hasattr(block, "content"):
+                    for item in block.content:
+                        if hasattr(item, "type") and item.type == "web_search_result":
+                            web_sources.append({
+                                "title": getattr(item, "title", ""),
+                                "url": getattr(item, "url", ""),
+                                "snippet": getattr(item, "snippet", getattr(item, "description", "")),
+                            })
+    except Exception as e:
+        web_context = f"Web search unavailable: {str(e)}"
+
+    # Step 3: Synthesize advisory response
+    oecd_text = "\n\n".join([
+        f"### Para {r['para_ref'] or 'N/A'} ({r['chapter']}, Page {r['page']})\n{r['text']}"
+        for r in oecd_references
+    ])
+
+    user_msg = f"""**CLIENT QUESTION:** {req.question}
+
+**RELEVANT OECD GUIDELINES PARAGRAPHS:**
+
+{oecd_text}
+
+**RECENT WEB INTELLIGENCE:**
+
+{web_context if web_context.strip() else "No recent web intelligence available."}"""
+
+    synthesis = anthropic_client.messages.create(
+        model=claude_model,
+        max_tokens=4096,
+        system=ADVISORY_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+
+    # Update usage tracking
+    lead["analysis_count"] = lead.get("analysis_count", 0) + 1
+    lead["last_analysis"] = datetime.now(timezone.utc).isoformat()
+    save_leads(leads)
+
+    return {
+        "answer": synthesis.content[0].text,
+        "oecd_references": oecd_references,
+        "web_sources": web_sources,
+        "model": claude_model,
+    }
 
 
 @app.get("/health")

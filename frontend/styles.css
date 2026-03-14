@@ -242,6 +242,193 @@ h1 {
     line-height: 1.5;
 }
 
+/* === MODE TOGGLE === */
+.mode-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.55rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.mode-btn:not(.active):hover { color: var(--text-primary); }
+
+/* === ADVISORY MODE === */
+.advisory-mode { margin-bottom: 1rem; }
+
+.advisory-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.advisory-input {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    font-size: 0.95rem;
+    font-family: var(--font-ui);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.3s;
+    line-height: 1.6;
+}
+
+.advisory-input:focus { border-color: var(--gold); }
+.advisory-input::placeholder { color: var(--text-muted); }
+
+.advisory-submit {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: var(--font-ui);
+    border: none;
+    border-radius: 10px;
+    background: var(--gold);
+    color: #0a1628;
+    cursor: pointer;
+    transition: all 0.2s;
+    align-self: flex-start;
+}
+
+.advisory-submit:hover { filter: brightness(1.1); }
+.advisory-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.advisory-loading {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.advisory-pulse {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.3); opacity: 1; }
+}
+
+.advisory-response {
+    animation: fadeInUp 0.35s ease-out;
+}
+
+.advisory-answer {
+    border-left: 4px solid var(--gold);
+    background: var(--bg-card);
+    border-radius: 0 10px 10px 0;
+    padding: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.advisory-answer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.advisory-answer-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.advisory-collapsible {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+    transition: all 0.15s;
+}
+
+.advisory-collapsible:hover { border-color: var(--accent); }
+
+.advisory-collapsible-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.advisory-refs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding-left: 0;
+}
+
+.web-source-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
+.web-source-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.web-source-title:hover { text-decoration: underline; }
+
+.web-source-snippet {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    font-family: var(--font-body);
+}
+
 /* === SEARCH === */
 .search-form {
     display: flex;
