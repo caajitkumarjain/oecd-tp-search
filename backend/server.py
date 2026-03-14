@@ -305,7 +305,7 @@ def chapters():
 
 @app.get("/analyze/status")
 def analyze_status():
-    return {"enabled": anthropic_client is not None, "model": os.environ.get("ANTHROPIC_MODEL", "claude-3-haiku-20240307")}
+    return {"enabled": anthropic_client is not None, "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6-20250514")}
 
 
 class RegisterRequest(BaseModel):
@@ -386,7 +386,7 @@ async def analyze(
     user_msg = f"**Search Query:** {req.query}\n\n**Relevant OECD Guidelines Paragraphs:**\n\n" + "\n\n".join(para_texts)
 
     response = anthropic_client.messages.create(
-        model=os.environ.get("ANTHROPIC_MODEL", "claude-3-haiku-20240307"),
+        model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6-20250514"),
         max_tokens=4096,
         system=ANALYSIS_SYSTEM_PROMPT,
         messages=[
